@@ -1,0 +1,75 @@
+services:
+  ts-router:
+      build:
+        context: ./nat-gateway
+        dockerfile: dockerfile.natgateway
+      container_name: ts-gateway
+      hostname: ts-fateway
+      image: ts-gateway
+      env_file:
+      - nat-gateway.env
+      - tailscale.env
+      cap_add:
+        - NET_ADMIN
+        - SYS_MODULE
+      volumes:
+        - /data/ts-gateway:/var/lib/tailscale
+      networks:
+        - tailscale_net
+        - internal_net
+      devices:
+        - /dev/net/tun:/dev/net/tun
+      restart: unless-stopped
+  traefik:
+    image: traefik:v3.3
+    container_name: traefik
+    command:
+      - "--log.level=DEBUG"
+      - "--entrypoints.web.address=:80"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.myresolver.acme.dnschallenge=true"
+      - "--certificatesresolvers.myresolver.acme.email=user@domain.com"
+      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
+      - "--certificatesresolvers.myresolver.acme.dnschallenge.provider=godaddy"
+      - "--certificatesresolvers.myresolver.acme.dnschallenge.resolvers=1.1.1.1:53,8.8.8.8:53"
+      - "--certificatesresolvers.cloudflare.acme.dnschallenge.delayBeforeCheck=30"
+      - "--certificatesresolvers.cloudflare.acme.dnschallenge=true"
+      - "--certificatesresolvers.cloudflare.acme.dnschallenge.resolvers=1.1.1.1"
+      - "--certificatesresolvers.cloudflare.acme.email=user@domain.com"
+      - "--certificatesresolvers.cloudflare.acme.storage=/letsencrypt/acme_cloudflare.json"
+      - "--certificatesresolvers.cloudflare.acme.dnschallenge.provider=cloudflare"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - "/data/letsencrypt:/letsencrypt"
+    env_file:
+      - "provider.env"
+    networks:
+      internal_net:
+        ipv4_address: 172.22.0.10
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik.rule=Host(`whoami.domain.com`)"
+      - "traefik.http.routers.traefik.service=api@internal"
+      - "traefik.port=8080"
+  whoami:
+    image: traefik/whoami
+    container_name: whoami
+    networks:
+      - internal_net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.whoami.rule=Host(`whoami.domain.com`)"
+      - "traefik.http.routers.whoami.entrypoints=websecure"
+      - "traefik.http.services.whoami.loadbalancer.server.port=80"
+      - "traefik.http.routers.whoami.tls.certresolver=cloudflare"
+
+networks:
+  internal_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.22.0.0/24
+  tailscale_net:
+    driver: bridge

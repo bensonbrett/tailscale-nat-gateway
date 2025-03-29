@@ -1,0 +1,22 @@
+FROM alpine:latest
+
+# Keep the package index so tools can be used after container starts
+RUN apk update && apk add iproute2 iputils busybox-extras curl bash iptables ip6tables ca-certificates openrc
+
+COPY setup-nat.sh /usr/local/bin/setup-nat.sh
+RUN chmod +x /usr/local/bin/setup-nat.sh
+
+# Install Tailscale
+RUN apk add --no-cache tailscale
+
+RUN ln -sf /usr/bin/tailscale /usr/local/bin/tailscale \
+    && ln -sf /usr/sbin/tailscaled /usr/local/bin/tailscaled
+
+# Set up OpenRC to manage services
+RUN rc-update add tailscale default
+
+# Expose any necessary ports (modify as needed)
+EXPOSE 41641/udp
+
+
+CMD ["/usr/local/bin/setup-nat.sh"]
