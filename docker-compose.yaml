@@ -4,7 +4,7 @@ services:
         context: ./nat-gateway
         dockerfile: dockerfile.natgateway
       container_name: ts-gateway
-      hostname: ts-fateway
+      hostname: ts-gateway
       image: ts-gateway
       env_file:
       - nat-gateway.env
